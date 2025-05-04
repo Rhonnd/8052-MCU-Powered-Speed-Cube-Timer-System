@@ -1,0 +1,795 @@
+ORG 0000H
+	LJMP START         	; Jump to the start of the code
+ORG 0003H
+	AJMP EXT_INT0_ISR  	; Jump to External Interrupt 0 ISR
+ORG 000BH
+	AJMP TIMER0_ISR    	; Jump to Timer 0 Interrupt Service Routine
+ORG 0100H			; Start of the main program code
+START:				;Initialize registers and interrupts
+	MOV TMOD, #01H     	; Set Timer 0 in Mode 1 (16-bit timer mode)
+	MOV TH0, #0D8H     	; Load high byte of Timer 0
+	MOV TL0, #0F0H     	; Load low byte of Timer 0
+	MOV R1, #00H
+	MOV R2, #00H
+	MOV R3, #00H
+	MOV R4, #00H
+	MOV R5, #00H
+	SETB ET0           	; Enable Timer 0 interrupt
+	SETB EA            	; Enable global interrupts
+	SETB P1.7
+	SETB EX0           	; Enable External Interrupt 0 (INT0)
+	SETB IT0           	; Configure INT0 to be level-triggered (optional, default is level-triggered)
+    	CLR INS_LED
+ ;Turn off on-board 7-segment display   
+	CLR P1.0 
+	CLR P1.1
+	CLR P1.2
+	CLR P1.3
+; Define 74HC595 (MUX) PINS 
+	SER EQU P2.7
+	RCK EQU P2.6
+	SCK EQU P2.5
+; Define segment control for 7-segment display
+	SEG_0 EQU P3.3 
+	SEG_1 EQU P3.7
+	SEG_2 EQU P3.5
+	SEG_3 EQU P3.6
+; Define Indicator Leds
+	INS_LED EQU P0.7
+	STRTINS_LED EQU P0.6
+	PENALTY_LED EQU P0.5
+	TIMERSTARTED_LED EQU P0.4
+; Define 7-segment display character codes
+	CHAR_0 EQU 0x3F   	; 0
+	CHAR_1 EQU 0x06   	; 1
+	CHAR_2 EQU 0x5B   	; 2
+	CHAR_3 EQU 0x4F   	; 3
+	CHAR_4 EQU 0x66   	; 4
+	CHAR_5 EQU 0x6D   	; 5
+	CHAR_6 EQU 0x7D   	; 6
+	CHAR_7 EQU 0x07   	; 7
+	CHAR_8 EQU 0x7F   	; 8
+	CHAR_9 EQU 0x6F   	; 9
+	CHAR_b EQU 0x7C   	; b
+	CHAR_C EQU 0x39   	; C
+	CHAR_d EQU 0x5E  	; d
+	CHAR_E EQU 0x79   	;E
+	CHAR_i EQU 0x30 	; i
+	CHAR_ii EQU 0x14 	;ii
+	CHAR_F EQU 0x71   	;F
+	CHAR_n EQU 0x54   	;n
+	CHAR_M EQU 0X55 	;M
+	CHAR_u EQU 0x1C		;u
+	CHAR_P EQU 0x73		;P
+	CHAR_r EQU 0x50 	;r
+	CHAR_t EQU 0x78 	;t
+	CHAR_PL EQU 0x40  	;-|
+	CHAR_US EQU 0x70  	;|-
+	CHAR_CLR EQU 00000000b  ; Clear character 
+IDLE: ;Idle display
+	JNB P1.6, MAIN_LOOP_INITJMP
+	JB P2.0, IDLE2
+	
+	CLR SEG_3
+	SETB SEG_0
+	MOV A, #CHAR_E
+	ACALL SHIFT_REG
+	ACALL DELAY
+	    
+	CLR SEG_0
+	SETB SEG_1
+	MOV A, #CHAR_b
+	ACALL SHIFT_REG
+	ACALL DELAY
+	    
+	CLR SEG_1
+	SETB SEG_2
+	MOV A, #CHAR_u
+	ACALL SHIFT_REG
+	ACALL DELAY
+	
+	CLR SEG_2
+	SETB SEG_3
+	MOV A, #CHAR_c
+	ACALL SHIFT_REG
+	ACALL DELAY
+	
+	INC R0
+	CJNE R0, #255, IDLE
+	SETB P2.0
+	JMP IDLE2
+	MAIN_LOOP_INITJMP: LJMP MAIN_LOOP_INIT
+IDLE2:
+	SETB SEG_0
+	CLR SEG_3
+	MOV A, #CHAR_r
+	ACALL SHIFT_REG
+	ACALL DELAY
+	
+	CLR SEG_0
+	SETB SEG_1
+	MOV A, #CHAR_m
+	ACALL SHIFT_REG
+	ACALL DELAY
+		
+	CLR SEG_1
+	SETB SEG_2
+	MOV A, #CHAR_I
+	ACALL SHIFT_REG
+	ACALL DELAY
+		
+	CLR SEG_2
+	SETB SEG_3
+	MOV A, #CHAR_t
+	ACALL SHIFT_REG
+	ACALL DELAY
+	    
+	INC R0
+	CJNE R0, #255, IDLEJMP
+	CLR P2.0
+	IDLEJMP: LJMP IDLE
+
+MAIN_LOOP_INIT:
+	ACALL DEBOUNCE
+	SETB EX0           	; Enable External Interrupt 0 (INT0)
+	SETB IT0            	; Configure INT0 to be level-triggered (optional, default is level-triggered)
+MAIN_LOOP:
+CLOCKRUNNING:    		; 7-segment display multiplexing and checking values
+	JNB TR0, CLOCKSTOP 	;Check if Timer Interrupt is running
+	
+	CLR SEG_3
+	SETB SEG_0
+	ACALL MILIS100
+	  
+	CLR SEG_0
+	SETB SEG_1
+	ACALL SECOND0
+	
+	CLR SEG_1
+	SETB SEG_2
+	ACALL SECOND1
+	
+	CLR SEG_2
+	SETB SEG_3
+	ACALL MINS
+	    
+	SJMP MAIN_LOOP
+CLOCKSTOP:
+	JB P2.0, CLOCKSTOP2	
+	
+	CLR SEG_3
+	SETB SEG_0
+	ACALL MILIS10
+	
+	CLR SEG_0
+	SETB SEG_1
+	ACALL MILIS100
+	
+	CLR SEG_1
+	SETB SEG_2
+	ACALL SECOND0
+		
+	CLR SEG_2
+	SETB SEG_3
+	ACALL SECOND1
+	INC R0
+	CJNE R0, #255, MAINJMP
+	SETB P2.0
+CLOCKSTOP2:
+	
+	CLR SEG_3
+	SETB SEG_0
+	ACALL MILIS100
+	
+	CLR SEG_0
+	SETB SEG_1
+	ACALL SECOND0
+		
+	CLR SEG_1
+	SETB SEG_2
+	ACALL SECOND1
+		
+	CLR SEG_2
+	SETB SEG_3
+	ACALL MINS
+	
+	INC R0
+	CJNE R0, #255, MAINJMP
+	CLR P2.0
+	SETB EX0           	; Enable External Interrupt 0 (INT0)
+	MAINJMP:	LJMP MAIN_LOOP
+	
+MILIS10:  
+	ACALL CHECK_10MS
+	ACALL DELAY
+	RET
+MILIS100:
+	ACALL CHECK_100MS
+	ACALL DELAY
+	RET
+SECOND0:
+	ACALL CHECK_SECOND0
+	ACALL DELAY
+	RET
+SECOND1:
+	ACALL CHECK_SECOND1
+	ACALL DELAY
+	RET
+MINS:
+	ACALL CHECK_MINS
+	ACALL DELAY
+	RET
+
+DELAY:
+	MOV R7, #255
+DELAY_LOOP:
+	DJNZ R7, DELAY_LOOP 
+	RET   
+DEBOUNCE:
+	MOV R7, #100
+DEBOUNCE_LOOP:
+	DJNZ R7,DEBOUNCE_LOOP  
+	RET  
+CHECK_10MS:
+	CJNE R2, #00H, M10
+	MOV A, #CHAR_0
+	ACALL SHIFT_REG
+	RET
+M10:
+	CJNE R2, #01H, M11
+	MOV A, #CHAR_1
+	ACALL SHIFT_REG
+	RET
+M11:
+	CJNE R2, #02H, M12
+	MOV A, #CHAR_2
+	ACALL SHIFT_REG
+	RET
+M12:
+	CJNE R2, #03H, M13
+	MOV A, #CHAR_3
+	ACALL SHIFT_REG
+	RET
+M13:
+	CJNE R2, #04H, M14
+	MOV A, #CHAR_4
+	ACALL SHIFT_REG
+	RET
+M14:
+	CJNE R2, #05H, M15
+	MOV A, #CHAR_5
+	ACALL SHIFT_REG
+	RET
+M15:
+	CJNE R2, #06H, M16
+	MOV A, #CHAR_6
+	ACALL SHIFT_REG
+	RET
+M16:
+	CJNE R2, #07H, M17
+	MOV A, #CHAR_7
+	ACALL SHIFT_REG
+	RET
+M17:
+	CJNE R2, #08H, M18
+	MOV A, #CHAR_8
+	ACALL SHIFT_REG
+	RET
+M18:
+	CJNE R2, #09H, M20
+	MOV A, #CHAR_9
+	ACALL SHIFT_REG
+	RET
+M20:
+	CJNE R2, #20, M255
+	MOV A, #CHAR_CLR
+	ACALL SHIFT_REG
+	RET
+M255:
+	CJNE R2, #255, M10
+	MOV A, #CHAR_CLR
+	ACALL SHIFT_REG
+	RET
+CHECK_100MS:
+M00:
+	CJNE R1, #00H, M01
+	MOV A, #CHAR_0
+	ACALL SHIFT_REG
+	RET
+M01:
+	CJNE R1, #01H, M02
+	MOV A, #CHAR_1
+	ACALL SHIFT_REG
+	RET
+M02:
+	CJNE R1, #02H, M03
+	MOV A, #CHAR_2
+	ACALL SHIFT_REG
+	RET
+M03:
+	CJNE R1, #03H, M04
+	MOV A, #CHAR_3
+	ACALL SHIFT_REG
+	RET
+M04:
+	CJNE R1, #04H, M05
+	MOV A, #CHAR_4
+	ACALL SHIFT_REG
+	RET
+M05:
+	CJNE R1, #05H, M06
+	MOV A, #CHAR_5
+	ACALL SHIFT_REG
+	RET
+M06:
+	CJNE R1, #06H, M07
+	MOV A, #CHAR_6
+	ACALL SHIFT_REG
+	RET
+M07:
+	CJNE R1, #07H, M08
+	MOV A, #CHAR_7
+	ACALL SHIFT_REG
+	RET
+M08:
+	CJNE R1, #08H, M09
+	MOV A, #CHAR_8
+	ACALL SHIFT_REG
+	RET
+M09:
+	CJNE R1, #09H, M020
+	MOV A, #CHAR_9
+	ACALL SHIFT_REG
+	RET
+M020:
+	CJNE R1, #020, M0255
+	MOV A, #CHAR_2
+	ACALL SHIFT_REG
+	RET
+M0255:
+	CJNE R1, #255, M00
+	MOV A, #CHAR_F
+	ACALL SHIFT_REG
+	RET
+CHECK_SECOND0:
+S000:
+	CJNE R3, #00H, S001
+	MOV A, #CHAR_0
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+S001:
+	CJNE R3, #01H, S002
+	MOV A, #CHAR_1
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+S002:
+	CJNE R3, #02H, S003
+	MOV A, #CHAR_2
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+S003:
+	CJNE R3, #03H, S004
+	MOV A, #CHAR_3
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+S004:
+	CJNE R3, #04H, S005
+	MOV A, #CHAR_4
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+S005:
+	CJNE R3, #05H, S006
+	MOV A, #CHAR_5
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+S006:
+	CJNE R3, #06H, S007
+	MOV A, #CHAR_6
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+S007:
+	CJNE R3, #07H, S008
+	MOV A, #CHAR_7
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+S008:
+	CJNE R3, #08H, S009
+	MOV A, #CHAR_8
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+S009:
+	CJNE R3, #09H, S020
+	MOV A, #CHAR_9
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+S020:
+	CJNE R3, #020, S0255
+	MOV A, #CHAR_US
+	ACALL SHIFT_REG
+	RET
+S0255:
+	CJNE R3, #255, S000
+	MOV A, #CHAR_n
+	ACALL SHIFT_REG
+	RET
+CHECK_SECOND1:
+S100:
+	CJNE R4, #00H, S101
+	MOV A, #CHAR_0
+	ACALL SHIFT_REG
+	RET
+S101:
+	CJNE R4, #01H, S102
+	MOV A, #CHAR_1
+	ACALL SHIFT_REG
+	RET
+S102:
+	CJNE R4, #02H, S103
+	MOV A, #CHAR_2
+	ACALL SHIFT_REG
+	RET
+S103:
+	CJNE R4, #03H, S104
+	MOV A, #CHAR_3
+	ACALL SHIFT_REG
+	RET
+S104:
+	CJNE R4, #04H, S105
+	MOV A, #CHAR_4
+	ACALL SHIFT_REG
+	RET
+S105:
+	CJNE R4, #05H, S106
+	MOV A, #CHAR_5
+	ACALL SHIFT_REG
+	RET
+S106:
+	CJNE R4, #06H, S107
+	MOV A, #CHAR_6
+	ACALL SHIFT_REG
+	RET
+S107:
+	CJNE R4, #07H, S108
+	MOV A, #CHAR_7
+	ACALL SHIFT_REG
+	RET
+S108:
+	CJNE R4, #08H, S109
+	MOV A, #CHAR_8
+	ACALL SHIFT_REG
+	RET
+S109:
+	CJNE R4, #09H, S120
+	MOV A, #CHAR_9
+	ACALL SHIFT_REG
+	RET
+S120:
+	CJNE R4, #020, S1255
+	MOV A, #CHAR_PL
+	ACALL SHIFT_REG
+	RET
+S1255:
+	CJNE R4, #255, S100
+	MOV A, #CHAR_d
+	ACALL SHIFT_REG
+	RET
+CHECK_MINS:
+MS00:
+	CJNE R5, #00H, MS01
+	MOV A, #CHAR_0
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+MS01:
+	CJNE R5, #01H, MS02
+	MOV A, #CHAR_1
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+MS02:
+	CJNE R5, #02H, MS03
+	MOV A, #CHAR_2
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+MS03:
+	CJNE R5, #03H, MS04
+	MOV A, #CHAR_3
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+MS04:
+	CJNE R5, #04H, MS05
+	MOV A, #CHAR_4
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+MS05:
+	CJNE R5, #05H, MS06
+	MOV A, #CHAR_5
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+MS06:
+	CJNE R5, #06H, MS07
+	MOV A, #CHAR_6
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+MS07:
+	CJNE R5, #07H, MS08
+	MOV A, #CHAR_7
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+MS08:
+	CJNE R5, #08H, MS09
+	MOV A, #CHAR_8
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+MS09:
+	CJNE R5, #09H, MS20
+	MOV A, #CHAR_9
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+MS20:
+	CJNE R5, #20, MS255
+	MOV A, #CHAR_CLR
+	ADD A, #10000000b
+	ACALL SHIFT_REG
+	RET
+MS255: 
+	CJNE R5, #255, MS00
+	MOV A, #CHAR_CLR
+	ACALL SHIFT_REG
+	RET
+TIMER0_ISR:
+	CLR TR0            		; Stop Timer 0
+	MOV TH0, #0D8H     		; Load high byte of Timer 0
+	MOV TL0, #0F0H     		; Load low byte of Timer 0
+	JNB INS_LED, INSPECT
+	JNB PENALTY_LED, INSPENALTY	
+	LJMP TIMER
+INSPECT:
+	JNB STRTINS_LED, STARTINS
+	MOV R2, #0 ;Load 15 Secs
+	MOV R1, #0
+	MOV R3, #5
+	MOV R4, #1
+	CLR STRTINS_LED
+STARTINS:
+	JB P3.2, CONTINUE_COUNTDOWN
+CONTINUE_COUNTDOWN:
+	DEC R2
+	MOV A, R2          		; Move R2 to accumulator
+	CJNE A, #255, CONTINUE_COUNT  	; Compare with 10 (100 ms)
+	MOV R2, #9        		; Reset R2
+	CPL P2.0           		; Toggle LED on P2.0 (every 100 ms)
+	DEC R1
+	MOV A, R1          		; Move R1 to accumulator
+	CJNE A, #255, CONTINUE_COUNT  	; Compare with 10 (1)
+	MOV R1, #9
+	CPL P2.1           		; Toggle LED on P2.1 (every 1 second)
+	DEC R3
+	MOV A, R3          		; Move R1 to accumulator
+	CJNE A, #255, CONTINUE_COUNT  	; Compare with 10 (10 SEC) 
+	MOV R3, #9
+	CPL P2.2           		; Toggle LED on P2.1 (every 10 second)
+	DEC R4
+	MOV A, R4          		; Move R1 to accumulator
+	CJNE A, #255, CONTINUE_COUNT  	; Compare with 10 (10 SEC) 
+	CPL P2.3           		; Toggle LED on P2.1 (every 10 second)
+	SETB INS_LED
+	SETB P0.6
+	CLR PENALTY_LED
+	MOV R2, #055
+INSPENALTY:
+	MOV R1, #020
+	MOV R3, #020
+	MOV R4, #020
+	MOV R5, #020
+	INC R2             		; Increment the 10 ms counter (R2)
+	MOV A, R2          		; Move R2 to accumulator
+	CJNE A, #255, CONTINUE_COUNT  	; Compare with 10 (100 ms)
+	CPL P2.0           		; Toggle LED on P2.0 (every 100 ms)
+	CLR TR0           		; STOP Timer 0
+DNF:
+	MOV R2, #255
+	MOV R1, #255
+	MOV R3, #255
+	MOV R4, #255
+	MOV R5, #255
+	SETB PENALTY_LED
+	RETI				; Return from interrupt
+TIMER:
+	INC R2             		; Increment the 10 ms counter (R2)
+	MOV A, R2          		; Move R2 to accumulator
+	CJNE A, #10, CONTINUE_COUNT  	; Compare with 10 (100 ms)
+	MOV R2, #00H       		; Reset R2
+	CPL P2.0           		; Toggle LED on P2.0 (every 100 ms)
+	INC R1             		; Increment the 100 ms counter (R1)
+	MOV A, R1          		; Move R1 to accumulator
+	CJNE A, #10, CONTINUE_COUNT  	; Compare with 10 (1 second)
+	MOV R1, #00H       		; Reset R1
+	CPL P2.1           		; Toggle LED on P2.1 (every 1 second)
+	INC R3             		; Increment the 1 second counter (R3)
+	MOV A, R3          		; Move R3 to accumulator
+	CJNE A, #10, CONTINUE_COUNT  	; Compare with 10 (10 seconds)
+	MOV R3, #00H       		; Reset R3
+	CPL P2.2           		; Toggle LED on P2.2 (every 10 seconds)
+	INC R4             		; Increment the 10 second counter (R4)
+	MOV A, R4          		; Move R4 to accumulator
+	CJNE A, #06, CONTINUE_COUNT  	; Compare with 6 (1 minute)
+	MOV R4, #00H       		; Reset R4
+	CPL P2.3           		; Toggle LED on P2.3 (every 1 minute)
+	INC R5             		; Increment the 1 minute counter (R5)
+	MOV A, R5          		; Move R5 to accumulator
+	CJNE A, #10, CONTINUE_COUNT  	; Compare with 10 (10 minutes)
+	MOV R5, #00H       		; Reset R5
+CONTINUE_COUNT:
+	SETB TR0           		; Restart Timer 0
+	RETI               		; Return from interrupt
+EXT_INT0_ISR: 				; External Interrupt 0 ISR
+	ACALL DEBOUNCE
+	JNB	P3.2 ,INSPECTION
+	RETI
+INSPECTION:
+	JNB TIMERSTARTED_LED, TIMERSTOP
+	JB INS_LED, TIMERSTART
+	JNB STRTINS_LED, TIMERSTART
+	ACALL SHOW_INS_DISPLAY
+	ACALL MEGDEBOUNCE
+	CLR P1.7
+	CLR P1.6
+	SETB P1.7
+	MOV R2, #0
+	MOV R1, #0
+	MOV R3, #0
+	MOV R4, #0
+	MOV R5, #0
+	SETB TR0            		; Stop Timer 0
+	RETI               		; Return from interrupt  
+TIMERSTART:	
+	ACALL SHOW_STRT_DISPLAY
+	JB INS_LED, TIMERSTOP
+	JB STRTINS_LED, TIMERSTOP
+	JNB TIMERSTARTED_LED, TIMERSTOP
+	SETB INS_LED
+	SETB P1.7
+	SETB STRTINS_LED
+	MOV R2, #0
+	MOV R1, #0
+	MOV R3, #0
+	MOV R4, #0
+	MOV R5, #0
+	CLR TIMERSTARTED_LED 		; Stop Timer 0
+	RETI               		; Return from interrupt  
+TIMERSTOP:
+	CLR TR0
+	CLR EX0
+	CALL DELAY
+	CALL DELAY
+	CALL DELAY
+	CLR TR0            ; Stop Timer 0
+	SETB IT0
+	RETI               ; Return from interrupt 
+RESET_DELAY:
+; START: Wait loop, time: 4.9 s
+; Clock: 12000.0 kHz (12 / MC)
+; Used registers: R7, R6, R0
+	JNB	P3.2, CONT_RESET_DEL
+	RET
+CONT_RESET_DEL:
+	MOV	R0, #030h
+	MOV	R6, #0D6h
+	MOV	R7, #0ECh
+	NOP
+	DJNZ	R7, $
+	DJNZ	R6, $-5
+	DJNZ	R0, $-9
+	MOV	R6, #01Dh
+	MOV	R7, #0B1h
+	NOP
+	DJNZ	R7, $
+	DJNZ	R6, $-5
+	LJMP END
+
+MEGDEBOUNCE:
+	WAIT:
+	NOP
+	JNB	P3.2 ,WAIT
+	ACALL DEBOUNCE
+	JNB	P3.2 ,WAIT
+	ACALL DEBOUNCE
+	JNB	P3.2 ,WAIT
+	RET
+SHOW_STRT_DISPLAY:
+	CLR SEG_3
+	SETB SEG_0
+	MOV A, #CHAR_t
+	ACALL SHIFT_REG
+	ACALL DELAY
+
+	CLR SEG_0
+	SETB SEG_1
+	MOV A, #CHAR_r
+	ACALL SHIFT_REG
+	ACALL DELAY
+
+	CLR SEG_1
+	SETB SEG_2
+	MOV A, #CHAR_t
+	ACALL SHIFT_REG
+	ACALL DELAY
+
+	CLR SEG_2
+	SETB SEG_3
+	MOV A, #CHAR_5
+	ACALL SHIFT_REG
+	ACALL DELAY
+	JNB P3.2, SHOW_STRT_DISPLAY
+	RET
+SHOW_inS_Display:
+	CLR SEG_3
+	SETB SEG_0
+	MOV A, #CHAR_P
+	ACALL SHIFT_REG
+	ACALL DELAY
+
+	CLR SEG_0
+	SETB SEG_1
+	MOV A, #CHAR_5
+	ACALL SHIFT_REG
+	ACALL DELAY
+
+	CLR SEG_1
+	SETB SEG_2
+	MOV A, #CHAR_n
+	ACALL SHIFT_REG
+	ACALL DELAY
+
+	CLR SEG_2
+	SETB SEG_3
+	MOV A, #CHAR_i
+	ACALL SHIFT_REG
+	ACALL DELAY
+	JNB P3.2, SHOW_inS_Display
+	RET
+
+SHIFT_REG:
+    SETB RCK           		; Latch pin HIGH – prepare to send data to shift register
+    MOV R6, #8         		; Load loop counter for 8 bits
+SHIFT_REG_LOOP:
+    RLC A              		; Rotate left through carry to get MSB of A into carry
+    JC HIGH_D          		; If carry is 1, send HIGH bit
+LOW_D:    	       		; Other wise send LOW bit
+    CLR SER            		; Set serial data line LOW (bit = 0)
+    CLR SCK            		; Clock LOW
+    SETB SCK           		; Clock HIGH to shift in the bit
+    DJNZ R6, SHIFT_REG_LOOP 	; Loop until all 8 bits sent
+    CLR RCK            		; Latch pin LOW – finalize data
+    RET                		; Return from subroutine
+HIGH_D:
+    SETB SER           		; Set serial data line HIGH (bit = 1)
+    CLR SCK            		; Clock LOW
+    SETB SCK           		; Clock HIGH to shift in the bit
+    DJNZ R6, SHIFT_REG_LOOP 	; Loop until all 8 bits sent
+    CLR RCK            		; Latch pin LOW – finalize data
+    RET                		; Return from subroutine
+END:
+END
+
+
+

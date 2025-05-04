@@ -1,0 +1,1130 @@
+8052 MCU-Powered Speed Cube Timer System                                                                                PAGE 1
+                         1     ORG 0000H
+0000 020100              2             LJMP START              ; Jump to the start of the code
+                         3     ORG 0003H
+0003 81BD                4             AJMP EXT_INT0_ISR       ; Jump to External Interrupt 0 ISR
+                         5     ORG 000BH
+000B 8126                6             AJMP TIMER0_ISR         ; Jump to Timer 0 Interrupt Service Routine
+                         7     ORG 0100H                       ; Start of the main program code
+                         8     START:                          ;Initialize registers and interrupts
+0100 758901              9             MOV TMOD, #01H          ; Set Timer 0 in Mode 1 (16-bit timer mode)
+0103 758CD8             10             MOV TH0, #0D8H          ; Load high byte of Timer 0
+0106 758AF0             11             MOV TL0, #0F0H          ; Load low byte of Timer 0
+0109 7900               12             MOV R1, #00H
+010B 7A00               13             MOV R2, #00H
+010D 7B00               14             MOV R3, #00H
+010F 7C00               15             MOV R4, #00H
+0111 7D00               16             MOV R5, #00H
+0113 D2A9               17             SETB ET0                ; Enable Timer 0 interrupt
+0115 D2AF               18             SETB EA                 ; Enable global interrupts
+0117 D297               19             SETB P1.7
+0119 D2A8               20             SETB EX0                ; Enable External Interrupt 0 (INT0)
+011B D288               21             SETB IT0           ; Configure INT0 to be level-triggered (optional, default is level-trigger
+011D C287               22             CLR INS_LED
+                        23      ;Turn off on-board 7-segment display
+011F C290               24             CLR P1.0
+0121 C291               25             CLR P1.1
+0123 C292               26             CLR P1.2
+0125 C293               27             CLR P1.3
+                        28     ; Define 74HC595 (MUX) PINS
+  00A7                  29             SER EQU P2.7
+  00A6                  30             RCK EQU P2.6
+  00A5                  31             SCK EQU P2.5
+                        32     ; Define segment control for 7-segment display
+  00B3                  33             SEG_0 EQU P3.3
+  00B7                  34             SEG_1 EQU P3.7
+  00B5                  35             SEG_2 EQU P3.5
+  00B6                  36             SEG_3 EQU P3.6
+                        37     ; Define Indicator Leds
+  0087                  38             INS_LED EQU P0.7
+  0086                  39             STRTINS_LED EQU P0.6
+  0085                  40             PENALTY_LED EQU P0.5
+  0084                  41             TIMERSTARTED_LED EQU P0.4
+                        42     ; Define 7-segment display character codes
+  003F                  43             CHAR_0 EQU 0x3F   ; 0
+  0006                  44             CHAR_1 EQU 0x06   ; 1
+  005B                  45             CHAR_2 EQU 0x5B   ; 2
+  004F                  46             CHAR_3 EQU 0x4F   ; 3
+  0066                  47             CHAR_4 EQU 0x66   ; 4
+  006D                  48             CHAR_5 EQU 0x6D   ; 5
+  007D                  49             CHAR_6 EQU 0x7D   ; 6
+  0007                  50             CHAR_7 EQU 0x07   ; 7
+  007F                  51             CHAR_8 EQU 0x7F   ; 8
+  006F                  52             CHAR_9 EQU 0x6F   ; 9
+  007C                  53             CHAR_b EQU 0x7C   ; b
+  0039                  54             CHAR_C EQU 0x39   ; C
+  005E                  55             CHAR_d EQU 0x5E  ; d
+  0079                  56             CHAR_E EQU 0x79   ;E
+  0030                  57             CHAR_i EQU 0x30 ; i
+  0014                  58             CHAR_ii EQU 0x14 ;ii
+  0071                  59             CHAR_F EQU 0x71   ;F
+  0054                  60             CHAR_n EQU 0x54   ;n
+  0055                  61             CHAR_M EQU 0X55 ;M
+  001C                  62             CHAR_u EQU 0x1C ;u
+  0073                  63             CHAR_P EQU 0x73 ;P
+  0050                  64             CHAR_r EQU 0x50 ;r
+  0078                  65             CHAR_t EQU 0x78 ;t
+  0040                  66             CHAR_PL EQU 0x40  ;-|
+  0070                  67             CHAR_US EQU 0x70  ;|-
+  0000                  68             CHAR_CLR EQU 00000000b  ; Clear character
+                        69     IDLE: ;Idle display
+0127 309634             70             JNB P1.6, MAIN_LOOP_INITJMP
+012A 20A034             71             JB P2.0, IDLE2
+                        72
+012D C2B6               73             CLR SEG_3
+012F D2B3               74             SETB SEG_0
+0131 7479               75             MOV A, #CHAR_E
+0133 B194               76             ACALL SHIFT_REG
+0135 5112               77             ACALL DELAY
+                        78
+0137 C2B3               79             CLR SEG_0
+0139 D2B7               80             SETB SEG_1
+013B 747C               81             MOV A, #CHAR_b
+013D B194               82             ACALL SHIFT_REG
+013F 5112               83             ACALL DELAY
+                        84
+0141 C2B7               85             CLR SEG_1
+0143 D2B5               86             SETB SEG_2
+0145 741C               87             MOV A, #CHAR_u
+0147 B194               88             ACALL SHIFT_REG
+0149 5112               89             ACALL DELAY
+                        90
+014B C2B5               91             CLR SEG_2
+014D D2B6               92             SETB SEG_3
+014F 7439               93             MOV A, #CHAR_c
+0151 B194               94             ACALL SHIFT_REG
+0153 5112               95             ACALL DELAY
+                        96
+0155 08                 97             INC R0
+0156 B8FFCE             98             CJNE R0, #255, IDLE
+0159 D2A0               99             SETB P2.0
+015B 020161            100             JMP IDLE2
+015E 020192            101             MAIN_LOOP_INITJMP: LJMP MAIN_LOOP_INIT
+                       102     IDLE2:
+0161 D2B3              103             SETB SEG_0
+0163 C2B6              104             CLR SEG_3
+0165 7450              105             MOV A, #CHAR_r
+0167 B194              106             ACALL SHIFT_REG
+0169 5112              107             ACALL DELAY
+                       108
+016B C2B3              109             CLR SEG_0
+016D D2B7              110             SETB SEG_1
+016F 7455              111             MOV A, #CHAR_m
+0171 B194              112             ACALL SHIFT_REG
+0173 5112              113             ACALL DELAY
+                       114
+0175 C2B7              115             CLR SEG_1
+0177 D2B5              116             SETB SEG_2
+0179 7430              117             MOV A, #CHAR_I
+017B B194              118             ACALL SHIFT_REG
+017D 5112              119             ACALL DELAY
+                       120
+017F C2B5              121             CLR SEG_2
+0181 D2B6              122             SETB SEG_3
+0183 7478              123             MOV A, #CHAR_t
+0185 B194              124             ACALL SHIFT_REG
+0187 5112              125             ACALL DELAY
+                       126
+0189 08                127             INC R0
+018A B8FF02            128             CJNE R0, #255, IDLEJMP
+018D C2A0              129             CLR P2.0
+018F 020127            130             IDLEJMP: LJMP IDLE
+                       131
+                       132     MAIN_LOOP_INIT:
+0192 5117              133             ACALL DEBOUNCE
+0194 D2A8              134             SETB EX0           ; Enable External Interrupt 0 (INT0)
+0196 D288              135             SETB IT0            ; Configure INT0 to be level-triggered (optional, default is level-trigge
+                       136     MAIN_LOOP:
+                       137     CLOCKRUNNING:    ; 7-segment display multiplexing and checking values
+0198 308C1A            138             JNB TR0, CLOCKSTOP ;Check if Timer Interrupt is running
+                       139
+019B C2B6              140             CLR SEG_3
+019D D2B3              141             SETB SEG_0
+019F 31FE              142             ACALL MILIS100
+                       143
+01A1 C2B3              144             CLR SEG_0
+01A3 D2B7              145             SETB SEG_1
+01A5 5103              146             ACALL SECOND0
+                       147
+01A7 C2B7              148             CLR SEG_1
+01A9 D2B5              149             SETB SEG_2
+01AB 5108              150             ACALL SECOND1
+                       151
+01AD C2B5              152             CLR SEG_2
+01AF D2B6              153             SETB SEG_3
+01B1 510D              154             ACALL MINS
+                       155
+01B3 80E3              156             SJMP MAIN_LOOP
+                       157     CLOCKSTOP:
+01B5 20A01E            158             JB P2.0, CLOCKSTOP2
+                       159
+01B8 C2B6              160             CLR SEG_3
+01BA D2B3              161             SETB SEG_0
+01BC 31F9              162             ACALL MILIS10
+                       163
+01BE C2B3              164             CLR SEG_0
+01C0 D2B7              165             SETB SEG_1
+01C2 31FE              166             ACALL MILIS100
+                       167
+01C4 C2B7              168             CLR SEG_1
+01C6 D2B5              169             SETB SEG_2
+01C8 5103              170             ACALL SECOND0
+                       171
+01CA C2B5              172             CLR SEG_2
+01CC D2B6              173             SETB SEG_3
+01CE 5108              174             ACALL SECOND1
+01D0 08                175             INC R0
+01D1 B8FF22            176             CJNE R0, #255, MAINJMP
+01D4 D2A0              177             SETB P2.0
+                       178     CLOCKSTOP2:
+                       179
+01D6 C2B6              180             CLR SEG_3
+01D8 D2B3              181             SETB SEG_0
+01DA 31FE              182             ACALL MILIS100
+                       183
+01DC C2B3              184             CLR SEG_0
+01DE D2B7              185             SETB SEG_1
+01E0 5103              186             ACALL SECOND0
+                       187
+01E2 C2B7              188             CLR SEG_1
+01E4 D2B5              189             SETB SEG_2
+01E6 5108              190             ACALL SECOND1
+                       191
+01E8 C2B5              192             CLR SEG_2
+01EA D2B6              193             SETB SEG_3
+01EC 510D              194             ACALL MINS
+                       195
+01EE 08                196             INC R0
+01EF B8FF04            197             CJNE R0, #255, MAINJMP
+01F2 C2A0              198             CLR P2.0
+01F4 D2A8              199             SETB EX0           ; Enable External Interrupt 0 (INT0)
+01F6 020198            200             MAINJMP:        LJMP MAIN_LOOP
+                       201
+                       202     MILIS10:
+01F9 511C              203             ACALL CHECK_10MS
+01FB 5112              204             ACALL DELAY
+01FD 22                205             RET
+                       206     MILIS100:
+01FE 517C              207             ACALL CHECK_100MS
+0200 5112              208             ACALL DELAY
+0202 22                209             RET
+                       210     SECOND0:
+0203 51DC              211             ACALL CHECK_SECOND0
+0205 5112              212             ACALL DELAY
+0207 22                213             RET
+                       214     SECOND1:
+0208 7150              215             ACALL CHECK_SECOND1
+020A 5112              216             ACALL DELAY
+020C 22                217             RET
+                       218     MINS:
+020D 71B0              219             ACALL CHECK_MINS
+020F 5112              220             ACALL DELAY
+0211 22                221             RET
+                       222
+                       223     DELAY:
+0212 7FFF              224             MOV R7, #255
+                       225     DELAY_LOOP:
+0214 DFFE              226             DJNZ R7, DELAY_LOOP
+0216 22                227             RET
+                       228     DEBOUNCE:
+0217 7F64              229             MOV R7, #100
+                       230     DEBOUNCE_LOOP:
+0219 DFFE              231             DJNZ R7,DEBOUNCE_LOOP
+021B 22                232             RET
+                       233     CHECK_10MS:
+021C BA0005            234             CJNE R2, #00H, M10
+021F 743F              235             MOV A, #CHAR_0
+0221 B194              236             ACALL SHIFT_REG
+0223 22                237             RET
+                       238     M10:
+0224 BA0105            239             CJNE R2, #01H, M11
+0227 7406              240             MOV A, #CHAR_1
+0229 B194              241             ACALL SHIFT_REG
+022B 22                242             RET
+                       243     M11:
+022C BA0205            244             CJNE R2, #02H, M12
+022F 745B              245             MOV A, #CHAR_2
+0231 B194              246             ACALL SHIFT_REG
+0233 22                247             RET
+                       248     M12:
+0234 BA0305            249             CJNE R2, #03H, M13
+0237 744F              250             MOV A, #CHAR_3
+0239 B194              251             ACALL SHIFT_REG
+023B 22                252             RET
+                       253     M13:
+023C BA0405            254             CJNE R2, #04H, M14
+023F 7466              255             MOV A, #CHAR_4
+0241 B194              256             ACALL SHIFT_REG
+0243 22                257             RET
+                       258     M14:
+0244 BA0505            259             CJNE R2, #05H, M15
+0247 746D              260             MOV A, #CHAR_5
+0249 B194              261             ACALL SHIFT_REG
+024B 22                262             RET
+                       263     M15:
+024C BA0605            264             CJNE R2, #06H, M16
+024F 747D              265             MOV A, #CHAR_6
+0251 B194              266             ACALL SHIFT_REG
+0253 22                267             RET
+                       268     M16:
+0254 BA0705            269             CJNE R2, #07H, M17
+0257 7407              270             MOV A, #CHAR_7
+0259 B194              271             ACALL SHIFT_REG
+025B 22                272             RET
+                       273     M17:
+025C BA0805            274             CJNE R2, #08H, M18
+025F 747F              275             MOV A, #CHAR_8
+0261 B194              276             ACALL SHIFT_REG
+0263 22                277             RET
+                       278     M18:
+0264 BA0905            279             CJNE R2, #09H, M20
+0267 746F              280             MOV A, #CHAR_9
+0269 B194              281             ACALL SHIFT_REG
+026B 22                282             RET
+                       283     M20:
+026C BA1405            284             CJNE R2, #20, M255
+026F 7400              285             MOV A, #CHAR_CLR
+0271 B194              286             ACALL SHIFT_REG
+0273 22                287             RET
+                       288     M255:
+0274 BAFFAD            289             CJNE R2, #255, M10
+0277 7400              290             MOV A, #CHAR_CLR
+0279 B194              291             ACALL SHIFT_REG
+027B 22                292             RET
+                       293     CHECK_100MS:
+                       294     M00:
+027C B90005            295             CJNE R1, #00H, M01
+027F 743F              296             MOV A, #CHAR_0
+0281 B194              297             ACALL SHIFT_REG
+0283 22                298             RET
+                       299     M01:
+0284 B90105            300             CJNE R1, #01H, M02
+0287 7406              301             MOV A, #CHAR_1
+0289 B194              302             ACALL SHIFT_REG
+028B 22                303             RET
+                       304     M02:
+028C B90205            305             CJNE R1, #02H, M03
+028F 745B              306             MOV A, #CHAR_2
+0291 B194              307             ACALL SHIFT_REG
+0293 22                308             RET
+                       309     M03:
+0294 B90305            310             CJNE R1, #03H, M04
+0297 744F              311             MOV A, #CHAR_3
+0299 B194              312             ACALL SHIFT_REG
+029B 22                313             RET
+                       314     M04:
+029C B90405            315             CJNE R1, #04H, M05
+029F 7466              316             MOV A, #CHAR_4
+02A1 B194              317             ACALL SHIFT_REG
+02A3 22                318             RET
+                       319     M05:
+02A4 B90505            320             CJNE R1, #05H, M06
+02A7 746D              321             MOV A, #CHAR_5
+02A9 B194              322             ACALL SHIFT_REG
+02AB 22                323             RET
+                       324     M06:
+02AC B90605            325             CJNE R1, #06H, M07
+02AF 747D              326             MOV A, #CHAR_6
+02B1 B194              327             ACALL SHIFT_REG
+02B3 22                328             RET
+                       329     M07:
+02B4 B90705            330             CJNE R1, #07H, M08
+02B7 7407              331             MOV A, #CHAR_7
+02B9 B194              332             ACALL SHIFT_REG
+02BB 22                333             RET
+                       334     M08:
+02BC B90805            335             CJNE R1, #08H, M09
+02BF 747F              336             MOV A, #CHAR_8
+02C1 B194              337             ACALL SHIFT_REG
+02C3 22                338             RET
+                       339     M09:
+02C4 B90905            340             CJNE R1, #09H, M020
+02C7 746F              341             MOV A, #CHAR_9
+02C9 B194              342             ACALL SHIFT_REG
+02CB 22                343             RET
+                       344     M020:
+02CC B91405            345             CJNE R1, #020, M0255
+02CF 745B              346             MOV A, #CHAR_2
+02D1 B194              347             ACALL SHIFT_REG
+02D3 22                348             RET
+                       349     M0255:
+02D4 B9FFA5            350             CJNE R1, #255, M00
+02D7 7471              351             MOV A, #CHAR_F
+02D9 B194              352             ACALL SHIFT_REG
+02DB 22                353             RET
+                       354     CHECK_SECOND0:
+                       355     S000:
+02DC BB0007            356             CJNE R3, #00H, S001
+02DF 743F              357             MOV A, #CHAR_0
+02E1 2480              358             ADD A, #10000000b
+02E3 B194              359             ACALL SHIFT_REG
+02E5 22                360             RET
+                       361     S001:
+02E6 BB0107            362             CJNE R3, #01H, S002
+02E9 7406              363             MOV A, #CHAR_1
+02EB 2480              364             ADD A, #10000000b
+02ED B194              365             ACALL SHIFT_REG
+02EF 22                366             RET
+                       367     S002:
+02F0 BB0207            368             CJNE R3, #02H, S003
+02F3 745B              369             MOV A, #CHAR_2
+02F5 2480              370             ADD A, #10000000b
+02F7 B194              371             ACALL SHIFT_REG
+02F9 22                372             RET
+                       373     S003:
+02FA BB0307            374             CJNE R3, #03H, S004
+02FD 744F              375             MOV A, #CHAR_3
+02FF 2480              376             ADD A, #10000000b
+0301 B194              377             ACALL SHIFT_REG
+0303 22                378             RET
+                       379     S004:
+0304 BB0407            380             CJNE R3, #04H, S005
+0307 7466              381             MOV A, #CHAR_4
+0309 2480              382             ADD A, #10000000b
+030B B194              383             ACALL SHIFT_REG
+030D 22                384             RET
+                       385     S005:
+030E BB0507            386             CJNE R3, #05H, S006
+0311 746D              387             MOV A, #CHAR_5
+0313 2480              388             ADD A, #10000000b
+0315 B194              389             ACALL SHIFT_REG
+0317 22                390             RET
+                       391     S006:
+0318 BB0607            392             CJNE R3, #06H, S007
+031B 747D              393             MOV A, #CHAR_6
+031D 2480              394             ADD A, #10000000b
+031F B194              395             ACALL SHIFT_REG
+0321 22                396             RET
+                       397     S007:
+0322 BB0707            398             CJNE R3, #07H, S008
+0325 7407              399             MOV A, #CHAR_7
+0327 2480              400             ADD A, #10000000b
+0329 B194              401             ACALL SHIFT_REG
+032B 22                402             RET
+                       403     S008:
+032C BB0807            404             CJNE R3, #08H, S009
+032F 747F              405             MOV A, #CHAR_8
+0331 2480              406             ADD A, #10000000b
+0333 B194              407             ACALL SHIFT_REG
+0335 22                408             RET
+                       409     S009:
+0336 BB0907            410             CJNE R3, #09H, S020
+0339 746F              411             MOV A, #CHAR_9
+033B 2480              412             ADD A, #10000000b
+033D B194              413             ACALL SHIFT_REG
+033F 22                414             RET
+                       415     S020:
+0340 BB1405            416             CJNE R3, #020, S0255
+0343 7470              417             MOV A, #CHAR_US
+0345 B194              418             ACALL SHIFT_REG
+0347 22                419             RET
+                       420     S0255:
+0348 BBFF91            421             CJNE R3, #255, S000
+034B 7454              422             MOV A, #CHAR_n
+034D B194              423             ACALL SHIFT_REG
+034F 22                424             RET
+                       425     CHECK_SECOND1:
+                       426     S100:
+0350 BC0005            427             CJNE R4, #00H, S101
+0353 743F              428             MOV A, #CHAR_0
+0355 B194              429             ACALL SHIFT_REG
+0357 22                430             RET
+                       431     S101:
+0358 BC0105            432             CJNE R4, #01H, S102
+035B 7406              433             MOV A, #CHAR_1
+035D B194              434             ACALL SHIFT_REG
+035F 22                435             RET
+                       436     S102:
+0360 BC0205            437             CJNE R4, #02H, S103
+0363 745B              438             MOV A, #CHAR_2
+0365 B194              439             ACALL SHIFT_REG
+0367 22                440             RET
+                       441     S103:
+0368 BC0305            442             CJNE R4, #03H, S104
+036B 744F              443             MOV A, #CHAR_3
+036D B194              444             ACALL SHIFT_REG
+036F 22                445             RET
+                       446     S104:
+0370 BC0405            447             CJNE R4, #04H, S105
+0373 7466              448             MOV A, #CHAR_4
+0375 B194              449             ACALL SHIFT_REG
+0377 22                450             RET
+                       451     S105:
+0378 BC0505            452             CJNE R4, #05H, S106
+037B 746D              453             MOV A, #CHAR_5
+037D B194              454             ACALL SHIFT_REG
+037F 22                455             RET
+                       456     S106:
+0380 BC0605            457             CJNE R4, #06H, S107
+0383 747D              458             MOV A, #CHAR_6
+0385 B194              459             ACALL SHIFT_REG
+0387 22                460             RET
+                       461     S107:
+0388 BC0705            462             CJNE R4, #07H, S108
+038B 7407              463             MOV A, #CHAR_7
+038D B194              464             ACALL SHIFT_REG
+038F 22                465             RET
+                       466     S108:
+0390 BC0805            467             CJNE R4, #08H, S109
+0393 747F              468             MOV A, #CHAR_8
+0395 B194              469             ACALL SHIFT_REG
+0397 22                470             RET
+                       471     S109:
+0398 BC0905            472             CJNE R4, #09H, S120
+039B 746F              473             MOV A, #CHAR_9
+039D B194              474             ACALL SHIFT_REG
+039F 22                475             RET
+                       476     S120:
+03A0 BC1405            477             CJNE R4, #020, S1255
+03A3 7440              478             MOV A, #CHAR_PL
+03A5 B194              479             ACALL SHIFT_REG
+03A7 22                480             RET
+                       481     S1255:
+03A8 BCFFA5            482             CJNE R4, #255, S100
+03AB 745E              483             MOV A, #CHAR_d
+03AD B194              484             ACALL SHIFT_REG
+03AF 22                485             RET
+                       486     CHECK_MINS:
+                       487     MS00:
+03B0 BD0007            488             CJNE R5, #00H, MS01
+03B3 743F              489             MOV A, #CHAR_0
+03B5 2480              490             ADD A, #10000000b
+03B7 B194              491             ACALL SHIFT_REG
+03B9 22                492             RET
+                       493     MS01:
+03BA BD0107            494             CJNE R5, #01H, MS02
+03BD 7406              495             MOV A, #CHAR_1
+03BF 2480              496             ADD A, #10000000b
+03C1 B194              497             ACALL SHIFT_REG
+03C3 22                498             RET
+                       499     MS02:
+03C4 BD0207            500             CJNE R5, #02H, MS03
+03C7 745B              501             MOV A, #CHAR_2
+03C9 2480              502             ADD A, #10000000b
+03CB B194              503             ACALL SHIFT_REG
+03CD 22                504             RET
+                       505     MS03:
+03CE BD0307            506             CJNE R5, #03H, MS04
+03D1 744F              507             MOV A, #CHAR_3
+03D3 2480              508             ADD A, #10000000b
+03D5 B194              509             ACALL SHIFT_REG
+03D7 22                510             RET
+                       511     MS04:
+03D8 BD0407            512             CJNE R5, #04H, MS05
+03DB 7466              513             MOV A, #CHAR_4
+03DD 2480              514             ADD A, #10000000b
+03DF B194              515             ACALL SHIFT_REG
+03E1 22                516             RET
+                       517     MS05:
+03E2 BD0507            518             CJNE R5, #05H, MS06
+03E5 746D              519             MOV A, #CHAR_5
+03E7 2480              520             ADD A, #10000000b
+03E9 B194              521             ACALL SHIFT_REG
+03EB 22                522             RET
+                       523     MS06:
+03EC BD0607            524             CJNE R5, #06H, MS07
+03EF 747D              525             MOV A, #CHAR_6
+03F1 2480              526             ADD A, #10000000b
+03F3 B194              527             ACALL SHIFT_REG
+03F5 22                528             RET
+                       529     MS07:
+03F6 BD0707            530             CJNE R5, #07H, MS08
+03F9 7407              531             MOV A, #CHAR_7
+03FB 2480              532             ADD A, #10000000b
+03FD B194              533             ACALL SHIFT_REG
+03FF 22                534             RET
+                       535     MS08:
+0400 BD0807            536             CJNE R5, #08H, MS09
+0403 747F              537             MOV A, #CHAR_8
+0405 2480              538             ADD A, #10000000b
+0407 B194              539             ACALL SHIFT_REG
+0409 22                540             RET
+                       541     MS09:
+040A BD0907            542             CJNE R5, #09H, MS20
+040D 746F              543             MOV A, #CHAR_9
+040F 2480              544             ADD A, #10000000b
+0411 B194              545             ACALL SHIFT_REG
+0413 22                546             RET
+                       547     MS20:
+0414 BD1407            548             CJNE R5, #20, MS255
+0417 7400              549             MOV A, #CHAR_CLR
+0419 2480              550             ADD A, #10000000b
+041B B194              551             ACALL SHIFT_REG
+041D 22                552             RET
+                       553     MS255:
+041E BDFF8F            554             CJNE R5, #255, MS00
+0421 7400              555             MOV A, #CHAR_CLR
+0423 B194              556             ACALL SHIFT_REG
+0425 22                557             RET
+                       558     TIMER0_ISR:
+0426 C28C              559             CLR TR0            ; Stop Timer 0
+0428 758CD8            560             MOV TH0, #0D8H     ; Load high byte of Timer 0
+042B 758AF0            561             MOV TL0, #0F0H     ; Load low byte of Timer 0
+042E 308706            562             JNB INS_LED, INSPECT
+0431 30853D            563             JNB PENALTY_LED, INSPENALTY
+0434 02048F            564             LJMP TIMER
+                       565     INSPECT:
+0437 30860A            566             JNB STRTINS_LED, STARTINS
+043A 7A00              567             MOV R2, #0 ;Load 15 Secs
+043C 7900              568             MOV R1, #0
+043E 7B05              569             MOV R3, #5
+0440 7C01              570             MOV R4, #1
+0442 C286              571             CLR STRTINS_LED
+                       572     STARTINS:
+0444 20B200            573             JB P3.2, CONTINUE_COUNTDOWN
+                       574     CONTINUE_COUNTDOWN:
+0447 1A                575             DEC R2
+0448 EA                576             MOV A, R2          ; Move R2 to accumulator
+0449 B4FF6E            577             CJNE A, #255, CONTINUE_COUNT  ; Compare with 10 (100 ms)
+044C 7A09              578             MOV R2, #9        ; Reset R2
+044E B2A0              579             CPL P2.0           ; Toggle LED on P2.0 (every 100 ms)
+0450 19                580             DEC R1
+0451 E9                581             MOV A, R1          ; Move R1 to accumulator
+0452 B4FF65            582             CJNE A, #255, CONTINUE_COUNT  ; Compare with 10 (1)
+0455 7909              583             MOV R1, #9
+0457 B2A1              584             CPL P2.1           ; Toggle LED on P2.1 (every 1 second)
+0459 1B                585             DEC R3
+045A EB                586             MOV A, R3          ; Move R1 to accumulator
+045B B4FF5C            587             CJNE A, #255, CONTINUE_COUNT  ; Compare with 10 (10 SEC)
+045E 7B09              588             MOV R3, #9
+0460 B2A2              589             CPL P2.2           ; Toggle LED on P2.1 (every 10 second)
+0462 1C                590             DEC R4
+0463 EC                591             MOV A, R4          ; Move R1 to accumulator
+0464 B4FF53            592             CJNE A, #255, CONTINUE_COUNT  ; Compare with 10 (10 SEC)
+0467 B2A3              593             CPL P2.3           ; Toggle LED on P2.1 (every 10 second)
+0469 D287              594             SETB INS_LED
+046B D286              595             SETB P0.6
+046D C285              596             CLR PENALTY_LED
+046F 7A37              597             MOV R2, #055
+                       598     INSPENALTY:
+0471 7914              599             MOV R1, #020
+0473 7B14              600             MOV R3, #020
+0475 7C14              601             MOV R4, #020
+0477 7D14              602             MOV R5, #020
+0479 0A                603             INC R2             ; Increment the 10 ms counter (R2)
+047A EA                604             MOV A, R2          ; Move R2 to accumulator
+047B B4FF3C            605             CJNE A, #255, CONTINUE_COUNT  ; Compare with 10 (100 ms)
+047E B2A0              606             CPL P2.0           ; Toggle LED on P2.0 (every 100 ms)
+0480 C28C              607             CLR TR0           ; STOP Timer 0
+                       608     DNF:
+0482 7AFF              609             MOV R2, #255
+0484 79FF              610             MOV R1, #255
+0486 7BFF              611             MOV R3, #255
+0488 7CFF              612             MOV R4, #255
+048A 7DFF              613             MOV R5, #255
+048C D285              614             SETB PENALTY_LED
+048E 32                615             RETI; Return from interrupt
+                       616     TIMER:
+048F 0A                617             INC R2             ; Increment the 10 ms counter (R2)
+0490 EA                618             MOV A, R2          ; Move R2 to accumulator
+0491 B40A26            619             CJNE A, #10, CONTINUE_COUNT  ; Compare with 10 (100 ms)
+0494 7A00              620             MOV R2, #00H       ; Reset R2
+0496 B2A0              621             CPL P2.0           ; Toggle LED on P2.0 (every 100 ms)
+0498 09                622             INC R1             ; Increment the 100 ms counter (R1)
+0499 E9                623             MOV A, R1          ; Move R1 to accumulator
+049A B40A1D            624             CJNE A, #10, CONTINUE_COUNT  ; Compare with 10 (1 second)
+049D 7900              625             MOV R1, #00H       ; Reset R1
+049F B2A1              626             CPL P2.1           ; Toggle LED on P2.1 (every 1 second)
+04A1 0B                627             INC R3             ; Increment the 1 second counter (R3)
+04A2 EB                628             MOV A, R3          ; Move R3 to accumulator
+04A3 B40A14            629             CJNE A, #10, CONTINUE_COUNT  ; Compare with 10 (10 seconds)
+04A6 7B00              630             MOV R3, #00H       ; Reset R3
+04A8 B2A2              631             CPL P2.2           ; Toggle LED on P2.2 (every 10 seconds)
+04AA 0C                632             INC R4             ; Increment the 10 second counter (R4)
+04AB EC                633             MOV A, R4          ; Move R4 to accumulator
+04AC B4060B            634             CJNE A, #06, CONTINUE_COUNT  ; Compare with 6 (1 minute)
+04AF 7C00              635             MOV R4, #00H       ; Reset R4
+04B1 B2A3              636             CPL P2.3           ; Toggle LED on P2.3 (every 1 minute)
+04B3 0D                637             INC R5             ; Increment the 1 minute counter (R5)
+04B4 ED                638             MOV A, R5          ; Move R5 to accumulator
+04B5 B40A02            639             CJNE A, #10, CONTINUE_COUNT  ; Compare with 10 (10 minutes)
+04B8 7D00              640             MOV R5, #00H       ; Reset R5
+                       641     CONTINUE_COUNT:
+04BA D28C              642             SETB TR0           ; Restart Timer 0
+04BC 32                643             RETI               ; Return from interrupt
+                       644     EXT_INT0_ISR: ; External Interrupt 0 ISR
+04BD 5117              645             ACALL DEBOUNCE
+04BF 30B201            646             JNB     P3.2 ,INSPECTION
+04C2 32                647             RETI
+                       648             INSPECTION:
+04C3 30843B            649             JNB TIMERSTARTED_LED, TIMERSTOP
+04C6 20871A            650             JB INS_LED, TIMERSTART
+04C9 308617            651             JNB STRTINS_LED, TIMERSTART
+                       652
+04CC B168              653             ACALL SHOW_INS_DISPLAY
+04CE B12D              654             ACALL MEGDEBOUNCE
+04D0 C297              655             CLR P1.7
+04D2 C296              656             CLR P1.6
+04D4 D297              657             SETB P1.7
+04D6 7A00              658             MOV R2, #0
+04D8 7900              659             MOV R1, #0
+04DA 7B00              660             MOV R3, #0
+04DC 7C00              661             MOV R4, #0
+04DE 7D00              662             MOV R5, #0
+04E0 D28C              663             SETB TR0            ; Stop Timer 0
+04E2 32                664             RETI               ; Return from interrupt
+                       665             TIMERSTART:
+04E3 B13C              666             ACALL SHOW_STRT_DISPLAY
+04E5 208719            667             JB INS_LED, TIMERSTOP
+04E8 208616            668             JB STRTINS_LED, TIMERSTOP
+04EB 308413            669             JNB TIMERSTARTED_LED, TIMERSTOP
+04EE D287              670             SETB INS_LED
+04F0 D297              671             SETB P1.7
+04F2 D286              672             SETB STRTINS_LED
+04F4 7A00              673             MOV R2, #0
+04F6 7900              674             MOV R1, #0
+04F8 7B00              675             MOV R3, #0
+04FA 7C00              676             MOV R4, #0
+04FC 7D00              677             MOV R5, #0
+04FE C284              678             CLR TIMERSTARTED_LED ; Stop Timer 0
+0500 32                679             RETI               ; Return from interrupt
+                       680     TIMERSTOP:
+0501 C28C              681             CLR TR0
+0503 C2A8              682             CLR EX0
+0505 5112              683             CALL DELAY
+0507 5112              684             CALL DELAY
+0509 5112              685             CALL DELAY
+050B C28C              686             CLR TR0            ; Stop Timer 0
+050D D288              687             SETB IT0
+050F 32                688             RETI               ; Return from interrupt
+                       689     RESET_DELAY:
+                       690     ; START: Wait loop, time: 4.9 s
+                       691     ; Clock: 12000.0 kHz (12 / MC)
+                       692     ; Used registers: R7, R6, R0
+0510 30B201            693             JNB     P3.2, CONT_RESET_DEL
+0513 22                694             RET
+                       695     CONT_RESET_DEL:
+0514 7830              696             MOV     R0, #030h
+0516 7ED6              697             MOV     R6, #0D6h
+0518 7FEC              698             MOV     R7, #0ECh
+051A 00                699             NOP
+051B DFFE              700             DJNZ    R7, $
+051D DEF9              701             DJNZ    R6, $-5
+051F D8F5              702             DJNZ    R0, $-9
+0521 7E1D              703             MOV     R6, #01Dh
+0523 7FB1              704             MOV     R7, #0B1h
+0525 00                705             NOP
+0526 DFFE              706             DJNZ    R7, $
+0528 DEF9              707             DJNZ    R6, $-5
+052A 0205B1            708             LJMP END
+                       709
+                       710     MEGDEBOUNCE:
+                       711             WAIT:
+052D 00                712             NOP
+052E 30B2FC            713             JNB     P3.2 ,WAIT
+0531 5117              714             ACALL DEBOUNCE
+0533 30B2F7            715             JNB     P3.2 ,WAIT
+0536 5117              716             ACALL DEBOUNCE
+0538 30B2F2            717             JNB     P3.2 ,WAIT
+053B 22                718             RET
+                       719     SHOW_STRT_DISPLAY:
+053C C2B6              720             CLR SEG_3
+053E D2B3              721             SETB SEG_0
+0540 7478              722             MOV A, #CHAR_t
+0542 B194              723             ACALL SHIFT_REG
+0544 5112              724             ACALL DELAY
+                       725
+0546 C2B3              726             CLR SEG_0
+0548 D2B7              727             SETB SEG_1
+054A 7450              728             MOV A, #CHAR_r
+054C B194              729             ACALL SHIFT_REG
+054E 5112              730             ACALL DELAY
+                       731
+0550 C2B7              732             CLR SEG_1
+0552 D2B5              733             SETB SEG_2
+0554 7478              734             MOV A, #CHAR_t
+0556 B194              735             ACALL SHIFT_REG
+0558 5112              736             ACALL DELAY
+                       737
+055A C2B5              738             CLR SEG_2
+055C D2B6              739             SETB SEG_3
+055E 746D              740             MOV A, #CHAR_5
+0560 B194              741             ACALL SHIFT_REG
+0562 5112              742             ACALL DELAY
+0564 30B2D5            743             JNB P3.2, SHOW_STRT_DISPLAY
+0567 22                744             RET
+                       745     SHOW_inS_Display:
+0568 C2B6              746             CLR SEG_3
+056A D2B3              747             SETB SEG_0
+056C 7473              748             MOV A, #CHAR_P
+056E B194              749             ACALL SHIFT_REG
+0570 5112              750             ACALL DELAY
+                       751
+0572 C2B3              752             CLR SEG_0
+0574 D2B7              753             SETB SEG_1
+0576 746D              754             MOV A, #CHAR_5
+0578 B194              755             ACALL SHIFT_REG
+057A 5112              756             ACALL DELAY
+                       757
+057C C2B7              758             CLR SEG_1
+057E D2B5              759             SETB SEG_2
+0580 7454              760             MOV A, #CHAR_n
+0582 B194              761             ACALL SHIFT_REG
+0584 5112              762             ACALL DELAY
+                       763
+0586 C2B5              764             CLR SEG_2
+0588 D2B6              765             SETB SEG_3
+058A 7430              766             MOV A, #CHAR_i
+058C B194              767             ACALL SHIFT_REG
+058E 5112              768             ACALL DELAY
+0590 30B2D5            769             JNB P3.2, SHOW_inS_Display
+0593 22                770             RET
+                       771
+                       772     SHIFT_REG:
+0594 D2A6              773         SETB RCK           ; Latch pin HIGH – prepare to send data to shift register
+0596 7E08              774         MOV R6, #8         ; Load loop counter for 8 bits
+                       775
+                       776     SHIFT_REG_LOOP:
+0598 33                777         RLC A              ; Rotate left through carry to get MSB of A into carry
+0599 400B              778         JC HIGH_D          ; If carry is 1, send HIGH bit
+                       779
+                       780     LOW_D:                 ; Other wise send LOW bit
+059B C2A7              781         CLR SER            ; Set serial data line LOW (bit = 0)
+059D C2A5              782         CLR SCK            ; Clock LOW
+059F D2A5              783         SETB SCK           ; Clock HIGH to shift in the bit
+05A1 DEF5              784         DJNZ R6, SHIFT_REG_LOOP ; Loop until all 8 bits sent
+05A3 C2A6              785         CLR RCK            ; Latch pin LOW – finalize data
+05A5 22                786         RET                ; Return from subroutine
+                       787
+                       788     HIGH_D:
+05A6 D2A7              789         SETB SER           ; Set serial data line HIGH (bit = 1)
+05A8 C2A5              790         CLR SCK            ; Clock LOW
+05AA D2A5              791         SETB SCK           ; Clock HIGH to shift in the bit
+05AC DEEA              792         DJNZ R6, SHIFT_REG_LOOP ; Loop until all 8 bits sent
+05AE C2A6              793         CLR RCK            ; Latch pin LOW – finalize data
+05B0 22                794         RET                ; Return from subroutine
+                       795
+                       796     END:
+****WARNING:Reservedkeywordusedaslabel
+                       797     END
+ASSEMBLY COMPLETE, NO ERRORS FOUND, 1 WARNING
+
+
+ERROR SUMMARY:
+Line 796, WARNING:Reservedkeywordusedaslabel
+
+SYMBOL TABLE:
+??MCU_8051_IDE . . . . . . . . . . .  N  NUMB  8051H  NOT USED
+??VERSION. . . . . . . . . . . . . .  N  NUMB  0149H  NOT USED
+AC . . . . . . . . . . . . . . . . .  B  ADDR  00D6H  NOT USED
+ACC. . . . . . . . . . . . . . . . .  D  ADDR  00E0H  NOT USED
+ACSR . . . . . . . . . . . . . . . .  D  ADDR  0097H  NOT USED
+ADCF . . . . . . . . . . . . . . . .  D  ADDR  00F6H  NOT USED
+ADCLK. . . . . . . . . . . . . . . .  D  ADDR  00F2H  NOT USED
+ADCON. . . . . . . . . . . . . . . .  D  ADDR  00F3H  NOT USED
+ADDH . . . . . . . . . . . . . . . .  D  ADDR  00F5H  NOT USED
+ADDL . . . . . . . . . . . . . . . .  D  ADDR  00F4H  NOT USED
+AUXR . . . . . . . . . . . . . . . .  D  ADDR  008EH  NOT USED
+AUXR1. . . . . . . . . . . . . . . .  D  ADDR  00A2H  NOT USED
+B. . . . . . . . . . . . . . . . . .  D  ADDR  00F0H  NOT USED
+BDRCON . . . . . . . . . . . . . . .  D  ADDR  009BH  NOT USED
+BDRCON_1 . . . . . . . . . . . . . .  D  ADDR  009CH  NOT USED
+BRL. . . . . . . . . . . . . . . . .  D  ADDR  009AH  NOT USED
+CCAP0H . . . . . . . . . . . . . . .  D  ADDR  00FAH  NOT USED
+CCAP0L . . . . . . . . . . . . . . .  D  ADDR  00EAH  NOT USED
+CCAP1H . . . . . . . . . . . . . . .  D  ADDR  00FBH  NOT USED
+CCAP1L . . . . . . . . . . . . . . .  D  ADDR  00EBH  NOT USED
+CCAP2H . . . . . . . . . . . . . . .  D  ADDR  00FCH  NOT USED
+CCAP3H . . . . . . . . . . . . . . .  D  ADDR  00FDH  NOT USED
+CCAP4H . . . . . . . . . . . . . . .  D  ADDR  00FEH  NOT USED
+CCAPL2H. . . . . . . . . . . . . . .  D  ADDR  00FCH  NOT USED
+CCAPL2L. . . . . . . . . . . . . . .  D  ADDR  00ECH  NOT USED
+CCAPL3H. . . . . . . . . . . . . . .  D  ADDR  00FDH  NOT USED
+CCAPL3L. . . . . . . . . . . . . . .  D  ADDR  00EDH  NOT USED
+CCAPL4H. . . . . . . . . . . . . . .  D  ADDR  00FEH  NOT USED
+CCAPL4L. . . . . . . . . . . . . . .  D  ADDR  00EEH  NOT USED
+CCAPM0 . . . . . . . . . . . . . . .  D  ADDR  00DAH  NOT USED
+CCAPM1 . . . . . . . . . . . . . . .  D  ADDR  00DBH  NOT USED
+CCAPM2 . . . . . . . . . . . . . . .  D  ADDR  00DCH  NOT USED
+CCAPM3 . . . . . . . . . . . . . . .  D  ADDR  00DDH  NOT USED
+CCAPM4 . . . . . . . . . . . . . . .  D  ADDR  00DEH  NOT USED
+CCF0 . . . . . . . . . . . . . . . .  B  ADDR  00D8H  NOT USED
+CCF1 . . . . . . . . . . . . . . . .  B  ADDR  00D9H  NOT USED
+CCF2 . . . . . . . . . . . . . . . .  B  ADDR  00DAH  NOT USED
+CCF3 . . . . . . . . . . . . . . . .  B  ADDR  00DBH  NOT USED
+CCF4 . . . . . . . . . . . . . . . .  B  ADDR  00DCH  NOT USED
+CCON . . . . . . . . . . . . . . . .  D  ADDR  00D8H  NOT USED
+CFINT. . . . . . . . . . . . . . . .  C  ADDR  0033H  NOT USED
+CH . . . . . . . . . . . . . . . . .  D  ADDR  00F9H  NOT USED
+CHAR_0 . . . . . . . . . . . . . . .  N  NUMB  003FH
+CHAR_1 . . . . . . . . . . . . . . .  N  NUMB  0006H
+CHAR_2 . . . . . . . . . . . . . . .  N  NUMB  005BH
+CHAR_3 . . . . . . . . . . . . . . .  N  NUMB  004FH
+CHAR_4 . . . . . . . . . . . . . . .  N  NUMB  0066H
+CHAR_5 . . . . . . . . . . . . . . .  N  NUMB  006DH
+CHAR_6 . . . . . . . . . . . . . . .  N  NUMB  007DH
+CHAR_7 . . . . . . . . . . . . . . .  N  NUMB  0007H
+CHAR_8 . . . . . . . . . . . . . . .  N  NUMB  007FH
+CHAR_9 . . . . . . . . . . . . . . .  N  NUMB  006FH
+CHAR_B . . . . . . . . . . . . . . .  N  NUMB  007CH
+CHAR_C . . . . . . . . . . . . . . .  N  NUMB  0039H
+CHAR_CLR . . . . . . . . . . . . . .  N  NUMB  0000H
+CHAR_D . . . . . . . . . . . . . . .  N  NUMB  005EH
+CHAR_E . . . . . . . . . . . . . . .  N  NUMB  0079H
+CHAR_F . . . . . . . . . . . . . . .  N  NUMB  0071H
+CHAR_I . . . . . . . . . . . . . . .  N  NUMB  0030H
+CHAR_II. . . . . . . . . . . . . . .  N  NUMB  0014H  NOT USED
+CHAR_M . . . . . . . . . . . . . . .  N  NUMB  0055H
+CHAR_N . . . . . . . . . . . . . . .  N  NUMB  0054H
+CHAR_P . . . . . . . . . . . . . . .  N  NUMB  0073H
+CHAR_PL. . . . . . . . . . . . . . .  N  NUMB  0040H
+CHAR_R . . . . . . . . . . . . . . .  N  NUMB  0050H
+CHAR_T . . . . . . . . . . . . . . .  N  NUMB  0078H
+CHAR_U . . . . . . . . . . . . . . .  N  NUMB  001CH
+CHAR_US. . . . . . . . . . . . . . .  N  NUMB  0070H
+CHECK_100MS. . . . . . . . . . . . .  C  ADDR  027CH
+CHECK_10MS . . . . . . . . . . . . .  C  ADDR  021CH
+CHECK_MINS . . . . . . . . . . . . .  C  ADDR  03B0H
+CHECK_SECOND0. . . . . . . . . . . .  C  ADDR  02DCH
+CHECK_SECOND1. . . . . . . . . . . .  C  ADDR  0350H
+CKCON. . . . . . . . . . . . . . . .  D  ADDR  008FH  NOT USED
+CKCON0 . . . . . . . . . . . . . . .  D  ADDR  008FH  NOT USED
+CKRL . . . . . . . . . . . . . . . .  D  ADDR  0097H  NOT USED
+CKSEL. . . . . . . . . . . . . . . .  D  ADDR  0085H  NOT USED
+CL . . . . . . . . . . . . . . . . .  D  ADDR  00E9H  NOT USED
+CLKREG . . . . . . . . . . . . . . .  D  ADDR  008FH  NOT USED
+CLOCKRUNNING . . . . . . . . . . . .  C  ADDR  0198H  NOT USED
+CLOCKSTOP. . . . . . . . . . . . . .  C  ADDR  01B5H
+CLOCKSTOP2 . . . . . . . . . . . . .  C  ADDR  01D6H
+CMOD . . . . . . . . . . . . . . . .  D  ADDR  00D9H  NOT USED
+CONTINUE_COUNT . . . . . . . . . . .  C  ADDR  04BAH
+CONTINUE_COUNTDOWN . . . . . . . . .  C  ADDR  0447H
+CONT_RESET_DEL . . . . . . . . . . .  C  ADDR  0514H
+CPRL2. . . . . . . . . . . . . . . .  B  ADDR  00C8H  NOT USED
+CR . . . . . . . . . . . . . . . . .  B  ADDR  00DEH  NOT USED
+CT2. . . . . . . . . . . . . . . . .  B  ADDR  00C9H  NOT USED
+CY . . . . . . . . . . . . . . . . .  B  ADDR  00D7H  NOT USED
+DEBOUNCE . . . . . . . . . . . . . .  C  ADDR  0217H
+DEBOUNCE_LOOP. . . . . . . . . . . .  C  ADDR  0219H
+DELAY. . . . . . . . . . . . . . . .  C  ADDR  0212H
+DELAY_LOOP . . . . . . . . . . . . .  C  ADDR  0214H
+DNF. . . . . . . . . . . . . . . . .  C  ADDR  0482H  NOT USED
+DP0H . . . . . . . . . . . . . . . .  D  ADDR  0083H  NOT USED
+DP0L . . . . . . . . . . . . . . . .  D  ADDR  0082H  NOT USED
+DP1H . . . . . . . . . . . . . . . .  D  ADDR  0085H  NOT USED
+DP1L . . . . . . . . . . . . . . . .  D  ADDR  0084H  NOT USED
+DPH. . . . . . . . . . . . . . . . .  D  ADDR  0083H  NOT USED
+DPL. . . . . . . . . . . . . . . . .  D  ADDR  0082H  NOT USED
+EA . . . . . . . . . . . . . . . . .  B  ADDR  00AFH
+EC . . . . . . . . . . . . . . . . .  B  ADDR  00AEH  NOT USED
+EECON. . . . . . . . . . . . . . . .  D  ADDR  0096H  NOT USED
+END. . . . . . . . . . . . . . . . .  C  ADDR  05B1H
+ES . . . . . . . . . . . . . . . . .  B  ADDR  00ACH  NOT USED
+ET0. . . . . . . . . . . . . . . . .  B  ADDR  00A9H
+ET1. . . . . . . . . . . . . . . . .  B  ADDR  00ABH  NOT USED
+ET2. . . . . . . . . . . . . . . . .  B  ADDR  00ADH  NOT USED
+EX0. . . . . . . . . . . . . . . . .  B  ADDR  00A8H
+EX1. . . . . . . . . . . . . . . . .  B  ADDR  00AAH  NOT USED
+EXEN2. . . . . . . . . . . . . . . .  B  ADDR  00CBH  NOT USED
+EXF2 . . . . . . . . . . . . . . . .  B  ADDR  00CEH  NOT USED
+EXTI0. . . . . . . . . . . . . . . .  C  ADDR  0003H  NOT USED
+EXTI1. . . . . . . . . . . . . . . .  C  ADDR  0013H  NOT USED
+EXT_INT0_ISR . . . . . . . . . . . .  C  ADDR  04BDH
+F0 . . . . . . . . . . . . . . . . .  B  ADDR  00D5H  NOT USED
+FE . . . . . . . . . . . . . . . . .  B  ADDR  009FH  NOT USED
+HIGH_D . . . . . . . . . . . . . . .  C  ADDR  05A6H
+IDLE . . . . . . . . . . . . . . . .  C  ADDR  0127H
+IDLE2. . . . . . . . . . . . . . . .  C  ADDR  0161H
+IDLEJMP. . . . . . . . . . . . . . .  C  ADDR  018FH
+IE . . . . . . . . . . . . . . . . .  D  ADDR  00A8H  NOT USED
+IE0. . . . . . . . . . . . . . . . .  B  ADDR  0089H  NOT USED
+IE1. . . . . . . . . . . . . . . . .  B  ADDR  008BH  NOT USED
+INSPECT. . . . . . . . . . . . . . .  C  ADDR  0437H
+INSPECTION . . . . . . . . . . . . .  C  ADDR  04C3H
+INSPENALTY . . . . . . . . . . . . .  C  ADDR  0471H
+INS_LED. . . . . . . . . . . . . . .  N  NUMB  0087H
+INT0 . . . . . . . . . . . . . . . .  B  ADDR  00B2H  NOT USED
+INT1 . . . . . . . . . . . . . . . .  B  ADDR  00B3H  NOT USED
+IP . . . . . . . . . . . . . . . . .  D  ADDR  00B8H  NOT USED
+IPH. . . . . . . . . . . . . . . . .  D  ADDR  00B7H  NOT USED
+IPH0 . . . . . . . . . . . . . . . .  D  ADDR  00B7H  NOT USED
+IPH1 . . . . . . . . . . . . . . . .  D  ADDR  00B3H  NOT USED
+IPL0 . . . . . . . . . . . . . . . .  D  ADDR  00B8H  NOT USED
+IPL1 . . . . . . . . . . . . . . . .  D  ADDR  00B2H  NOT USED
+IT0. . . . . . . . . . . . . . . . .  B  ADDR  0088H
+IT1. . . . . . . . . . . . . . . . .  B  ADDR  008AH  NOT USED
+KBE. . . . . . . . . . . . . . . . .  D  ADDR  009DH  NOT USED
+KBF. . . . . . . . . . . . . . . . .  D  ADDR  009EH  NOT USED
+KBLS . . . . . . . . . . . . . . . .  D  ADDR  009CH  NOT USED
+LOW_D. . . . . . . . . . . . . . . .  C  ADDR  059BH  NOT USED
+M00. . . . . . . . . . . . . . . . .  C  ADDR  027CH
+M01. . . . . . . . . . . . . . . . .  C  ADDR  0284H
+M02. . . . . . . . . . . . . . . . .  C  ADDR  028CH
+M020 . . . . . . . . . . . . . . . .  C  ADDR  02CCH
+M0255. . . . . . . . . . . . . . . .  C  ADDR  02D4H
+M03. . . . . . . . . . . . . . . . .  C  ADDR  0294H
+M04. . . . . . . . . . . . . . . . .  C  ADDR  029CH
+M05. . . . . . . . . . . . . . . . .  C  ADDR  02A4H
+M06. . . . . . . . . . . . . . . . .  C  ADDR  02ACH
+M07. . . . . . . . . . . . . . . . .  C  ADDR  02B4H
+M08. . . . . . . . . . . . . . . . .  C  ADDR  02BCH
+M09. . . . . . . . . . . . . . . . .  C  ADDR  02C4H
+M10. . . . . . . . . . . . . . . . .  C  ADDR  0224H
+M11. . . . . . . . . . . . . . . . .  C  ADDR  022CH
+M12. . . . . . . . . . . . . . . . .  C  ADDR  0234H
+M13. . . . . . . . . . . . . . . . .  C  ADDR  023CH
+M14. . . . . . . . . . . . . . . . .  C  ADDR  0244H
+M15. . . . . . . . . . . . . . . . .  C  ADDR  024CH
+M16. . . . . . . . . . . . . . . . .  C  ADDR  0254H
+M17. . . . . . . . . . . . . . . . .  C  ADDR  025CH
+M18. . . . . . . . . . . . . . . . .  C  ADDR  0264H
+M20. . . . . . . . . . . . . . . . .  C  ADDR  026CH
+M255 . . . . . . . . . . . . . . . .  C  ADDR  0274H
+MAINJMP. . . . . . . . . . . . . . .  C  ADDR  01F6H
+MAIN_LOOP. . . . . . . . . . . . . .  C  ADDR  0198H
+MAIN_LOOP_INIT . . . . . . . . . . .  C  ADDR  0192H
+MAIN_LOOP_INITJMP. . . . . . . . . .  C  ADDR  015EH
+MEGDEBOUNCE. . . . . . . . . . . . .  C  ADDR  052DH
+MILIS10. . . . . . . . . . . . . . .  C  ADDR  01F9H
+MILIS100 . . . . . . . . . . . . . .  C  ADDR  01FEH
+MINS . . . . . . . . . . . . . . . .  C  ADDR  020DH
+MS00 . . . . . . . . . . . . . . . .  C  ADDR  03B0H
+MS01 . . . . . . . . . . . . . . . .  C  ADDR  03BAH
+MS02 . . . . . . . . . . . . . . . .  C  ADDR  03C4H
+MS03 . . . . . . . . . . . . . . . .  C  ADDR  03CEH
+MS04 . . . . . . . . . . . . . . . .  C  ADDR  03D8H
+MS05 . . . . . . . . . . . . . . . .  C  ADDR  03E2H
+MS06 . . . . . . . . . . . . . . . .  C  ADDR  03ECH
+MS07 . . . . . . . . . . . . . . . .  C  ADDR  03F6H
+MS08 . . . . . . . . . . . . . . . .  C  ADDR  0400H
+MS09 . . . . . . . . . . . . . . . .  C  ADDR  040AH
+MS20 . . . . . . . . . . . . . . . .  C  ADDR  0414H
+MS255. . . . . . . . . . . . . . . .  C  ADDR  041EH
+OSCCON . . . . . . . . . . . . . . .  D  ADDR  0086H  NOT USED
+OV . . . . . . . . . . . . . . . . .  B  ADDR  00D2H  NOT USED
+P. . . . . . . . . . . . . . . . . .  B  ADDR  00D0H  NOT USED
+P0 . . . . . . . . . . . . . . . . .  D  ADDR  0080H
+P1 . . . . . . . . . . . . . . . . .  D  ADDR  0090H
+P1M1 . . . . . . . . . . . . . . . .  D  ADDR  00D4H  NOT USED
+P1M2 . . . . . . . . . . . . . . . .  D  ADDR  00E2H  NOT USED
+P2 . . . . . . . . . . . . . . . . .  D  ADDR  00A0H
+P3 . . . . . . . . . . . . . . . . .  D  ADDR  00B0H
+P3M1 . . . . . . . . . . . . . . . .  D  ADDR  00D5H  NOT USED
+P3M2 . . . . . . . . . . . . . . . .  D  ADDR  00E3H  NOT USED
+P4 . . . . . . . . . . . . . . . . .  D  ADDR  00C0H  NOT USED
+P4M1 . . . . . . . . . . . . . . . .  D  ADDR  00D6H  NOT USED
+P4M2 . . . . . . . . . . . . . . . .  D  ADDR  00E4H  NOT USED
+P5 . . . . . . . . . . . . . . . . .  D  ADDR  00E8H  NOT USED
+PC . . . . . . . . . . . . . . . . .  B  ADDR  00BEH  NOT USED
+PCON . . . . . . . . . . . . . . . .  D  ADDR  0087H  NOT USED
+PENALTY_LED. . . . . . . . . . . . .  N  NUMB  0085H
+PPCL . . . . . . . . . . . . . . . .  B  ADDR  00BEH  NOT USED
+PS . . . . . . . . . . . . . . . . .  B  ADDR  00BCH  NOT USED
+PSL. . . . . . . . . . . . . . . . .  B  ADDR  00BCH  NOT USED
+PSW. . . . . . . . . . . . . . . . .  D  ADDR  00D0H  NOT USED
+PT0. . . . . . . . . . . . . . . . .  B  ADDR  00B9H  NOT USED
+PT0L . . . . . . . . . . . . . . . .  B  ADDR  00B9H  NOT USED
+PT1. . . . . . . . . . . . . . . . .  B  ADDR  00BBH  NOT USED
+PT1L . . . . . . . . . . . . . . . .  B  ADDR  00BBH  NOT USED
+PT2. . . . . . . . . . . . . . . . .  B  ADDR  00BDH  NOT USED
+PT2L . . . . . . . . . . . . . . . .  B  ADDR  00BDH  NOT USED
+PX0. . . . . . . . . . . . . . . . .  B  ADDR  00B8H  NOT USED
+PX0L . . . . . . . . . . . . . . . .  B  ADDR  00B8H  NOT USED
+PX1. . . . . . . . . . . . . . . . .  B  ADDR  00BAH  NOT USED
+PX1L . . . . . . . . . . . . . . . .  B  ADDR  00BAH  NOT USED
+RB8. . . . . . . . . . . . . . . . .  B  ADDR  009AH  NOT USED
+RCAP2H . . . . . . . . . . . . . . .  D  ADDR  00CBH  NOT USED
+RCAP2L . . . . . . . . . . . . . . .  D  ADDR  00CAH  NOT USED
+RCK. . . . . . . . . . . . . . . . .  N  NUMB  00A6H
+RCLK . . . . . . . . . . . . . . . .  B  ADDR  00CDH  NOT USED
+RD . . . . . . . . . . . . . . . . .  B  ADDR  00B7H  NOT USED
+REN. . . . . . . . . . . . . . . . .  B  ADDR  009CH  NOT USED
+RESET. . . . . . . . . . . . . . . .  C  ADDR  0000H  NOT USED
+RESET_DELAY. . . . . . . . . . . . .  C  ADDR  0510H  NOT USED
+RI . . . . . . . . . . . . . . . . .  B  ADDR  0098H  NOT USED
+RS0. . . . . . . . . . . . . . . . .  B  ADDR  00D3H  NOT USED
+RS1. . . . . . . . . . . . . . . . .  B  ADDR  00D4H  NOT USED
+RXD. . . . . . . . . . . . . . . . .  B  ADDR  00B0H  NOT USED
+S000 . . . . . . . . . . . . . . . .  C  ADDR  02DCH
+S001 . . . . . . . . . . . . . . . .  C  ADDR  02E6H
+S002 . . . . . . . . . . . . . . . .  C  ADDR  02F0H
+S003 . . . . . . . . . . . . . . . .  C  ADDR  02FAH
+S004 . . . . . . . . . . . . . . . .  C  ADDR  0304H
+S005 . . . . . . . . . . . . . . . .  C  ADDR  030EH
+S006 . . . . . . . . . . . . . . . .  C  ADDR  0318H
+S007 . . . . . . . . . . . . . . . .  C  ADDR  0322H
+S008 . . . . . . . . . . . . . . . .  C  ADDR  032CH
+S009 . . . . . . . . . . . . . . . .  C  ADDR  0336H
+S020 . . . . . . . . . . . . . . . .  C  ADDR  0340H
+S0255. . . . . . . . . . . . . . . .  C  ADDR  0348H
+S100 . . . . . . . . . . . . . . . .  C  ADDR  0350H
+S101 . . . . . . . . . . . . . . . .  C  ADDR  0358H
+S102 . . . . . . . . . . . . . . . .  C  ADDR  0360H
+S103 . . . . . . . . . . . . . . . .  C  ADDR  0368H
+S104 . . . . . . . . . . . . . . . .  C  ADDR  0370H
+S105 . . . . . . . . . . . . . . . .  C  ADDR  0378H
+S106 . . . . . . . . . . . . . . . .  C  ADDR  0380H
+S107 . . . . . . . . . . . . . . . .  C  ADDR  0388H
+S108 . . . . . . . . . . . . . . . .  C  ADDR  0390H
+S109 . . . . . . . . . . . . . . . .  C  ADDR  0398H
+S120 . . . . . . . . . . . . . . . .  C  ADDR  03A0H
+S1255. . . . . . . . . . . . . . . .  C  ADDR  03A8H
+SADDR. . . . . . . . . . . . . . . .  D  ADDR  00A9H  NOT USED
+SADDR_0. . . . . . . . . . . . . . .  D  ADDR  00A9H  NOT USED
+SADDR_1. . . . . . . . . . . . . . .  D  ADDR  00AAH  NOT USED
+SADEN. . . . . . . . . . . . . . . .  D  ADDR  00B9H  NOT USED
+SADEN_0. . . . . . . . . . . . . . .  D  ADDR  00B9H  NOT USED
+SADEN_1. . . . . . . . . . . . . . .  D  ADDR  00BAH  NOT USED
+SBUF . . . . . . . . . . . . . . . .  D  ADDR  0099H  NOT USED
+SCK. . . . . . . . . . . . . . . . .  N  NUMB  00A5H
+SCON . . . . . . . . . . . . . . . .  D  ADDR  0098H  NOT USED
+SECOND0. . . . . . . . . . . . . . .  C  ADDR  0203H
+SECOND1. . . . . . . . . . . . . . .  C  ADDR  0208H
+SEG_0. . . . . . . . . . . . . . . .  N  NUMB  00B3H
+SEG_1. . . . . . . . . . . . . . . .  N  NUMB  00B7H
+SEG_2. . . . . . . . . . . . . . . .  N  NUMB  00B5H
+SEG_3. . . . . . . . . . . . . . . .  N  NUMB  00B6H
+SER. . . . . . . . . . . . . . . . .  N  NUMB  00A7H
+SHIFT_REG. . . . . . . . . . . . . .  C  ADDR  0594H
+SHIFT_REG_LOOP . . . . . . . . . . .  C  ADDR  0598H
+SHOW_INS_DISPLAY . . . . . . . . . .  C  ADDR  0568H
+SHOW_STRT_DISPLAY. . . . . . . . . .  C  ADDR  053CH
+SINT . . . . . . . . . . . . . . . .  C  ADDR  0023H  NOT USED
+SM0. . . . . . . . . . . . . . . . .  B  ADDR  009FH  NOT USED
+SM1. . . . . . . . . . . . . . . . .  B  ADDR  009EH  NOT USED
+SM2. . . . . . . . . . . . . . . . .  B  ADDR  009DH  NOT USED
+SP . . . . . . . . . . . . . . . . .  D  ADDR  0081H  NOT USED
+SPCON. . . . . . . . . . . . . . . .  D  ADDR  00C3H  NOT USED
+SPCR . . . . . . . . . . . . . . . .  D  ADDR  00D5H  NOT USED
+SPDAT. . . . . . . . . . . . . . . .  D  ADDR  00C5H  NOT USED
+SPDR . . . . . . . . . . . . . . . .  D  ADDR  0086H  NOT USED
+SPSR . . . . . . . . . . . . . . . .  D  ADDR  00AAH  NOT USED
+SPSTA. . . . . . . . . . . . . . . .  D  ADDR  00C4H  NOT USED
+START. . . . . . . . . . . . . . . .  C  ADDR  0100H
+STARTINS . . . . . . . . . . . . . .  C  ADDR  0444H
+STRTINS_LED. . . . . . . . . . . . .  N  NUMB  0086H
+T0 . . . . . . . . . . . . . . . . .  B  ADDR  00B4H  NOT USED
+T1 . . . . . . . . . . . . . . . . .  B  ADDR  00B5H  NOT USED
+T2CON. . . . . . . . . . . . . . . .  D  ADDR  00C8H  NOT USED
+T2MOD. . . . . . . . . . . . . . . .  D  ADDR  00C9H  NOT USED
+TB8. . . . . . . . . . . . . . . . .  B  ADDR  009BH  NOT USED
+TCLK . . . . . . . . . . . . . . . .  B  ADDR  00CCH  NOT USED
+TCON . . . . . . . . . . . . . . . .  D  ADDR  0088H  NOT USED
+TF0. . . . . . . . . . . . . . . . .  B  ADDR  008DH  NOT USED
+TF1. . . . . . . . . . . . . . . . .  B  ADDR  008FH  NOT USED
+TF2. . . . . . . . . . . . . . . . .  B  ADDR  00CFH  NOT USED
+TH0. . . . . . . . . . . . . . . . .  D  ADDR  008CH
+TH1. . . . . . . . . . . . . . . . .  D  ADDR  008DH  NOT USED
+TH2. . . . . . . . . . . . . . . . .  D  ADDR  00CDH  NOT USED
+TI . . . . . . . . . . . . . . . . .  B  ADDR  0099H  NOT USED
+TIMER. . . . . . . . . . . . . . . .  C  ADDR  048FH
+TIMER0 . . . . . . . . . . . . . . .  C  ADDR  000BH  NOT USED
+TIMER0_ISR . . . . . . . . . . . . .  C  ADDR  0426H
+TIMER1 . . . . . . . . . . . . . . .  C  ADDR  001BH  NOT USED
+TIMER2 . . . . . . . . . . . . . . .  C  ADDR  002BH  NOT USED
+TIMERSTART . . . . . . . . . . . . .  C  ADDR  04E3H
+TIMERSTARTED_LED . . . . . . . . . .  N  NUMB  0084H
+TIMERSTOP. . . . . . . . . . . . . .  C  ADDR  0501H
+TL0. . . . . . . . . . . . . . . . .  D  ADDR  008AH
+TL1. . . . . . . . . . . . . . . . .  D  ADDR  008BH  NOT USED
+TL2. . . . . . . . . . . . . . . . .  D  ADDR  00CCH  NOT USED
+TMOD . . . . . . . . . . . . . . . .  D  ADDR  0089H
+TR0. . . . . . . . . . . . . . . . .  B  ADDR  008CH
+TR1. . . . . . . . . . . . . . . . .  B  ADDR  008EH  NOT USED
+TR2. . . . . . . . . . . . . . . . .  B  ADDR  00CAH  NOT USED
+TXD. . . . . . . . . . . . . . . . .  B  ADDR  00B1H  NOT USED
+WAIT . . . . . . . . . . . . . . . .  C  ADDR  052DH
+WDTCON . . . . . . . . . . . . . . .  D  ADDR  00A7H  NOT USED
+WDTPRG . . . . . . . . . . . . . . .  D  ADDR  00A7H  NOT USED
+WDTRST . . . . . . . . . . . . . . .  D  ADDR  00A6H  NOT USED
+WR . . . . . . . . . . . . . . . . .  B  ADDR  00B6H  NOT USED
